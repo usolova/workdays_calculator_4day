@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Калькулятор рабочих дней — 4‑дневка + Наурыз</title>
+  <style>
+    :root { --pad: 14px; --radius: 12px; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji';
+           margin:0; background:#f6f7f9; color:#111; }
+    .wrap { max-width: 880px; margin: 24px auto 64px; padding: 0 var(--pad); }
+    .card { background:white; border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,.06); padding: 18px; }
+    h1 { font-size: 22px; margin: 0 0 10px; }
+    p.lead { margin: 0 0 16px; color:#444; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    label { display:block; font-size: 14px; margin-bottom: 6px; color:#333; }
+    input[type="date"], input[type="number"], textarea, select {
+      width: 100%; padding: 12px; border-radius: 10px; border:1px solid #e1e4ea; background:#fbfbfc; font-size: 14px; box-sizing:border-box;
+    }
+    textarea { height: 96px; resize: vertical; }
+    .weekend-box { background:#fafbff; border:1px solid #e6e9f5; border-radius: 12px; padding: 12px; }
+    .weekend { display:flex; flex-wrap: wrap; gap: 10px; }
+    .chip { display:flex; align-items:center; gap:8px; background:#f2f3f8; border:1px solid #e3e6ef; padding:8px 10px; border-radius: 999px; font-size:13px; }
+    .row { display:flex; gap: 10px; align-items: center; }
+    .row > * { flex: 1; }
+    .btn { appearance:none; border:none; background:#111827; color:white; padding:12px 16px; border-radius: 12px; font-size:14px; cursor:pointer; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .muted { color:#666; font-size: 13px; }
+    .result { margin-top: 16px; padding: 14px; border-radius: 12px; background:#f9fafb; border:1px dashed #d9dee8; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; }
+    details { background:#f9f9fe; border:1px solid #eaecf7; border-radius: 10px; padding: 10px 12px; }
+    summary { cursor: pointer; }
+    .footer { margin-top: 14px; font-size: 12px; color:#777; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Калькулятор рабочих дней (4‑дневная неделя)</h1>
+      <p class="lead">Учитывает выходные: <b>суббота, воскресенье, понедельник</b>, а также <b>Наурыз</b> (21–23 марта каждый год). Можно добавить свои праздничные дни.</p>
+
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <label for="start">Дата начала этапа</label>
+          <input id="start" type="date" />
+        </div>
+        <div>
+          <label for="days">Сколько рабочих дней считать</label>
+          <input id="days" type="number" min="1" step="1" placeholder="например, 7" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <label class="chip" style="flex:0 0 auto">
+          <input id="includeStart" type="checkbox" checked />
+          считать стартовый день как день №1 (если он рабочий)
+        </label>
+        <span class="muted" style="text-align:right">если старт — нерабочий, счёт начнётся со следующего рабочего дня</span>
+      </div>
+
+      <div class="grid" style="margin-top:12px">
+        <div class="weekend-box">
+          <label>Какие дни — выходные</label>
+          <div class="weekend" id="weekend">
+            <!-- 0=вс, 1=пн, 2=вт, 3=ср, 4=чт, 5=пт, 6=сб -->
+            <label class="chip"><input type="checkbox" value="1" checked /> пн</label>
+            <label class="chip"><input type="checkbox" value="6" checked /> сб</label>
+            <label class="chip"><input type="checkbox" value="0" checked /> вс</label>
+            <label class="chip"><input type="checkbox" value="2" /> вт</label>
+            <label class="chip"><input type="checkbox" value="3" /> ср</label>
+            <label class="chip"><input type="checkbox" value="4" /> чт</label>
+            <label class="chip"><input type="checkbox" value="5" /> пт</label>
+          </div>
+          <div class="muted" style="margin-top:6px">по умолчанию выделены сб, вс, пн</div>
+        </div>
+        <div>
+          <label for="extras">Дополнительные праздничные дни (переносы и пр.)</label>
+          <textarea id="extras" placeholder="по одному дню в строке. Поддерживается:\n— точная дата: 2026-03-24 или 24.03.2026\n— ежегодная дата: 12-31 или 31.12\n— ежегодный диапазон: 12-31..01-04 или 31.12..04.01"></textarea>
+          <div class="muted">Наурыз (21–23 марта) учитывается автоматически. Если в конкретный год были переносы — добавьте их здесь.</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="run">Посчитать</button>
+        <button class="btn" id="copy" disabled>Скопировать дату окончания</button>
+        <button class="btn" id="share">Поделиться ссылкой</button>
+      </div>
+
+      <div class="result" id="out" style="display:none"></div>
+
+      <div class="footer">
+        ⓘ Логика подсчёта: учитываются только рабочие дни. Если стартовый день рабочий и включён флажок — он считается как день №1, иначе счёт начинается со следующего рабочего дня.
+      </div>
+    </div>
+  </div>
+
+<script>
+  const MS_DAY = 24*60*60*1000;
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const toISO = (d) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}`;
+
+  // Гибкий парсер строки даты: YYYY-MM-DD (с любыми разделителями) или DD.MM.YYYY (с пробелами)
+  function parseDateFlexibleString(s) {
+    if (!s) return null;
+    s = s.trim();
+    // Normalize any unicode spaces around separators to single spaces
+    s = s.replace(/\u00A0/g, ' ');
+    // ISO-like: YYYY[-/. ]MM[-/. ]DD
+    let m = s.match(/^(\d{4})\s*[-\/\.\s]\s*(\d{1,2})\s*[-\/\.\s]\s*(\d{1,2})$/);
+    if (m) {
+      const y = +m[1], mo = +m[2], d = +m[3];
+      const dt = new Date(Date.UTC(y, mo-1, d));
+      return isNaN(dt) ? null : dt;
+    }
+    // Local-like: DD[.-/ ]MM[.-/ ]YYYY (allow spaces around dots)
+    m = s.match(/^(\d{1,2})\s*[.\-\/\s]\s*(\d{1,2})\s*[.\-\/\s]\s*(\d{4})$/);
+    if (m) {
+      const d = +m[1], mo = +m[2], y = +m[3];
+      const dt = new Date(Date.UTC(y, mo-1, d));
+      return isNaN(dt) ? null : dt;
+    }
+    return null;
+  }
+
+  // Получить дату из <input type=date> надёжно
+  function readDateFromInput(inputEl) {
+    if (inputEl.valueAsDate instanceof Date && !isNaN(inputEl.valueAsDate)) {
+      const v = inputEl.valueAsDate;
+      return new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+    }
+    const s = (inputEl.value || '').trim();
+    return parseDateFlexibleString(s);
+  }
+
+  const addDaysUTC = (d, n) => new Date(d.getTime() + n*MS_DAY);
+
+  function isNauryz(dateUtc) {
+    const m = dateUtc.getUTCMonth();
+    const day = dateUtc.getUTCDate();
+    return (m === 2) && (day >= 21 && day <= 23);
+  }
+
+  // Парсинг дополнительных праздников: точные даты, ежегодные даты и ежегодные диапазоны
+  function parseExtraHolidaysAdvanced(text) {
+    const exact = new Set();      // 'YYYY-MM-DD'
+    const annual = new Set();     // 'MM-DD'
+    const ranges = [];            // [{start:'MM-DD', end:'MM-DD'}]
+
+    const tokens = (text || '')
+      .split(/[\n,;]+/)
+      .map(t => t.trim())
+      .filter(Boolean);
+
+    for (const t of tokens) {
+      // Диапазон ежегодный: a..b
+      const parts = t.split('..').map(s => s.trim());
+      if (parts.length === 2) {
+        const a = normalizeAnnualDate(parts[0]);
+        const b = normalizeAnnualDate(parts[1]);
+        if (a && b) { ranges.push({start: a, end: b}); continue; }
+      }
+      // Точная дата (любой из двух форматов)
+      let d = parseDateFlexibleString(t);
+      if (d) { exact.add(toISO(d)); continue; }
+      // Ежегодная дата
+      const ann = normalizeAnnualDate(t);
+      if (ann) { annual.add(ann); continue; }
+    }
+    return { exact, annual, ranges };
+  }
+
+  // Нормализация ежегодной даты: 'MM-DD' или 'DD.MM' -> 'MM-DD'
+  function normalizeAnnualDate(s) {
+    if (!s) return null;
+    s = s.trim().replace(/\u00A0/g, ' ');
+    // 'MM-DD' or 'M-D'
+    let m = s.match(/^(\d{1,2})\s*-\s*(\d{1,2})$/);
+    if (m) {
+      const mm = pad2(+m[1]), dd = pad2(+m[2]);
+      if (+mm>=1 && +mm<=12 && +dd>=1 && +dd<=31) return `${mm}-${dd}`;
+    }
+    // 'DD.MM' or 'D.M'
+    m = s.match(/^(\d{1,2})\s*[.]\s*(\d{1,2})$/);
+    if (m) {
+      const dd = pad2(+m[1]), mm = pad2(+m[2]);
+      if (+mm>=1 && +mm<=12 && +dd>=1 && +dd<=31) return `${mm}-${dd}`;
+    }
+    return null;
+  }
+
+  function isInAnnualRange(mmdd, range) {
+    // mmdd is 'MM-DD'
+    const start = range.start, end = range.end;
+    if (start <= end) {
+      return mmdd >= start && mmdd <= end;
+    } else {
+      // диапазон через Новый год: например 12-31..01-04
+      return (mmdd >= start) || (mmdd <= end);
+    }
+  }
+
+  function addWorkingDays({ startDate, days, weekendSet, includeStart, extras }) {
+    if (!(startDate instanceof Date) || isNaN(startDate)) {
+      throw new Error('Неверная дата начала. Введите дату в формате ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.');
+    }
+    if (!(Number.isInteger(days) && days >= 1)) {
+      throw new Error('Введите целое число рабочих дней (минимум 1).');
+    }
+
+    const isExtraHoliday = (d) => {
+      const iso = toISO(d);
+      if (extras.exact.has(iso)) return 'доп. праздник';
+      const mm = pad2(d.getUTCMonth()+1), dd = pad2(d.getUTCDate());
+      const mmdd = `${mm}-${dd}`;
+      if (extras.annual.has(mmdd)) return 'доп. праздник (ежегодно)';
+      for (const r of extras.ranges) {
+        if (isInAnnualRange(mmdd, r)) return 'доп. праздник (ежегодный диапазон)';
+      }
+      return null;
+    };
+
+    const isWorking = (d) => {
+      const dow = d.getUTCDay(); // 0..6
+      if (weekendSet.has(dow)) return false;
+      if (isNauryz(d)) return false;
+      if (isExtraHoliday(d)) return false;
+      return true;
+    };
+
+    let current = new Date(startDate.getTime());
+    let counted = 0;
+    const skipped = [];
+
+    // Стартовый день
+    if (includeStart && isWorking(current)) {
+      counted = 1;
+    } else if (!isWorking(current)) {
+      const why = reasonOf(current, weekendSet, extras);
+      skipped.push({ date: toISO(current), reason: why });
+    }
+
+    // Если не засчитан — идём до первого рабочего
+    while (counted === 0) {
+      current = addDaysUTC(current, 1);
+      if (isWorking(current)) {
+        counted = 1;
+      } else {
+        skipped.push({ date: toISO(current), reason: reasonOf(current, weekendSet, extras) });
+      }
+    }
+
+    // Досчитываем оставшиеся рабочие дни
+    while (counted < days) {
+      current = addDaysUTC(current, 1);
+      if (isWorking(current)) {
+        counted++;
+      } else {
+        skipped.push({ date: toISO(current), reason: reasonOf(current, weekendSet, extras) });
+      }
+    }
+
+    return { endISO: toISO(current), skipped };
+  }
+
+  function reasonOf(d, weekendSet, extras) {
+    const reasons = [];
+    const dow = d.getUTCDay();
+    if (weekendSet.has(dow)) {
+      const names = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+      reasons.push('выходной (' + names[dow] + ')');
+    }
+    if (isNauryz(d)) reasons.push('Наурыз');
+    // уточним тип ежегодного/точного праздника
+    const iso = toISO(d);
+    if (extras.exact.has(iso)) reasons.push('доп. праздник');
+    const mmdd = `${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}`;
+    if (extras.annual.has(mmdd)) reasons.push('доп. праздник (ежегодно)');
+    for (const r of extras.ranges) {
+      if (isInAnnualRange(mmdd, r)) { reasons.push('доп. праздник (ежегодный диапазон)'); break; }
+    }
+    return reasons.join(', ');
+  }
+
+  // ===== UI =====
+  const $ = (id) => document.getElementById(id);
+  const startEl = $('start');
+  const daysEl = $('days');
+  const includeStartEl = $('includeStart');
+  const extrasEl = $('extras');
+  const outEl = $('out');
+  const btnRun = $('run');
+  const btnCopy = $('copy');
+  const btnShare = $('share');
+
+  // Сегодня по умолчанию (ISO в value, чтобы было валидно для всех локалей)
+  const now = new Date();
+  const todayISO = `${now.getUTCFullYear()}-${pad2(now.getUTCMonth()+1)}-${pad2(now.getUTCDate())}`;
+  startEl.value = todayISO;
+
+  btnRun.addEventListener('click', () => {
+    try {
+      outEl.style.display = 'none';
+      btnCopy.disabled = true;
+
+      const weekendChecks = Array.from(document.querySelectorAll('#weekend input[type="checkbox"]'));
+      const weekendSet = new Set(weekendChecks.filter(ch => ch.checked).map(ch => parseInt(ch.value, 10)));
+
+      const extras = parseExtraHolidaysAdvanced(extrasEl.value);
+
+      const startDate = readDateFromInput(startEl);
+      const numDays = parseInt(daysEl.value, 10);
+
+      const res = addWorkingDays({
+        startDate,
+        days: numDays,
+        weekendSet,
+        includeStart: includeStartEl.checked,
+        extras
+      });
+
+      let html = '';
+      html += `<div><b>Дата окончания этапа:</b> <span class="mono">${res.endISO}</span></div>`;
+      if (res.skipped.length) {
+        html += '<details style="margin-top:8px"><summary>Показать нерабочие дни, которые выпали в период</summary>';
+        html += '<ul style="margin:8px 0 0 20px">';
+        for (const s of res.skipped) {
+          html += `<li><span class="mono">${s.date}</span> — ${s.reason}</li>`;
+        }
+        html += '</ul></details>';
+      }
+
+      outEl.innerHTML = html;
+      outEl.style.display = 'block';
+      btnCopy.disabled = false;
+      btnCopy.onclick = () => navigator.clipboard.writeText(res.endISO).catch(()=>{});
+
+    } catch (err) {
+      outEl.innerHTML = `<b>Ошибка:</b> ${err.message}`;
+      outEl.style.display = 'block';
+    }
+  });
+
+  // Сделать ссылку на текущую страницу (self-contained)
+  function makeShareLink() {
+    const html = '<!DOCTYPE html>\\n' + document.documentElement.outerHTML;
+    const b64 = btoa(unescape(encodeURIComponent(html)));
+    return 'data:text/html;base64,' + b64;
+  }
+  btnShare.addEventListener('click', () => {
+    try {
+      const url = makeShareLink();
+      navigator.clipboard.writeText(url).then(() => {
+        outEl.innerHTML = '<b>Ссылка скопирована.</b> Её можно отправить коллегам; калькулятор откроется прямо в браузере.';
+        outEl.style.display = 'block';
+      }).catch(() => {
+        outEl.innerHTML = '<b>Готово:</b> открыл в новой вкладке. Скопируйте адрес оттуда, если автокопирование не сработало.';
+        outEl.style.display = 'block';
+      });
+      window.open(url, '_blank');
+    } catch (e) {
+      outEl.innerHTML = '<b>Ошибка при создании ссылки:</b> ' + e.message;
+      outEl.style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>
